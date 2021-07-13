@@ -505,6 +505,7 @@ abstract class BleManagerHandler extends RequestHandler {
 		final Context context = manager.getContext();
 		synchronized (LOCK) {
 			if (bluetoothGatt != null) {
+				// TODO: 2021/7/12 设备断开重联后的策略
 				// There are 2 ways of reconnecting to the same device:
 				// 1. Reusing the same BluetoothGatt object and calling connect() - this will force
 				//    the autoConnect flag to true
@@ -572,6 +573,7 @@ abstract class BleManagerHandler extends RequestHandler {
 		postCallback(c -> c.onDeviceConnecting(device));
 		postConnectionStateChange(o -> o.onDeviceConnecting(device));
 		connectionTime = SystemClock.elapsedRealtime();
+		// TODO: 2021/7/12 在不同版本上的 API 适配
 		if (Build.VERSION.SDK_INT > Build.VERSION_CODES.O) {
 			// connectRequest will never be null here.
 			final int preferredPhy = connectRequest.getPreferredPhy();
@@ -783,6 +785,13 @@ abstract class BleManagerHandler extends RequestHandler {
 		log(Log.INFO, "Service Changed characteristic found on a bonded device");
 		return internalEnableIndications(scCharacteristic);
 	}
+
+	// TODO: 2021/7/13  打开 server 端的 Notification
+	// Notification vs Indication
+	// https://stackoverflow.com/questions/48705235/what-is-enable-indication-value-and-enable-notification-value-in-client-characte
+	// A server can send notifications whenever it wants. Possibly even multiple notifications per connection event, which gives high performance. A server can only have one outstanding indication. The client needs to confirm the reception of an indication before the server can send a new one. This gives slow performance compared to notifications. Note that, in my opinion, using indications with Android or iOS as client is kind of useless because the confirmation is sent back by the Bluetooth stack before the app has handled the indication completely. So the confirmation is a "false" confirmation.
+	// Peripheral will send if there is any change, there will be an application level ack(from ble stack) in the next connection interval (only one indication is allowed for one connection interval),
+	// Notification 和 Indication 都是在 Characteristic 发生改变的时候由 server 端主动发起的通知，区别在于 indication 必须有一个 ack ，在一个连接时间内只能发送一个；当然这个 ack 应用层不会关心，因为在 BLE stack 层会自动处理
 
 	private boolean internalEnableNotifications(@Nullable final BluetoothGattCharacteristic characteristic) {
 		final BluetoothGatt gatt = bluetoothGatt;
@@ -1019,6 +1028,11 @@ abstract class BleManagerHandler extends RequestHandler {
 		return true;
 	}
 
+	/**
+	 * 读取电量
+	 * 电量的 service 以及 characteristics 都是有固定的 UUID 的
+	 * 通过 read 的方式获取
+	 */
 	@Deprecated
 	private boolean internalReadBatteryLevel() {
 		final BluetoothGatt gatt = bluetoothGatt;
@@ -1760,6 +1774,8 @@ abstract class BleManagerHandler extends RequestHandler {
 
 				if (!serviceDiscoveryRequested) {
 					final boolean bonded = gatt.getDevice().getBondState() == BluetoothDevice.BOND_BONDED;
+					// 在设备连接上后并不会立即进行进行 service discovery，而是会有一段时间的延时，目的是为了避免 bonded 设备的加密通信建立以及
+					//service change indication 回调
 					final int delay = manager.getServiceDiscoveryDelay(bonded);
 					if (delay > 0)
 						log(Log.DEBUG, "wait(" + delay + ")");
@@ -1774,6 +1790,8 @@ abstract class BleManagerHandler extends RequestHandler {
 						// automatically when connected. Wait with the discovery until bonding is
 						// complete. It will be initiated again in the bond state broadcast receiver
 						// on the top of this file.
+						// TODO: 2021/7/12 一些设备在连接上后会自动进行配对流程，等到配对流程结束再进行连接，如果这里设备处于 bonding 状态，则不做 serviceDiscovery
+						// bonding 表示在本地存储连接过程中的 key ，下次连接过程中可以直接进行数据交换
 						if (connected && !servicesDiscovered && !serviceDiscoveryRequested &&
 								gatt.getDevice().getBondState() != BluetoothDevice.BOND_BONDING) {
 							serviceDiscoveryRequested = true;

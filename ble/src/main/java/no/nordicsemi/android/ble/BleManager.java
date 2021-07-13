@@ -96,6 +96,9 @@ import no.nordicsemi.android.ble.utils.ParserUtils;
  */
 @SuppressWarnings({"WeakerAccess", "unused", "DeprecatedIsStillUsed", "deprecation"})
 public abstract class BleManager implements ILogger {
+	/**
+	 * Client Characteristic Configuration Descriptor -> short for CCCD. Used to enable or disable server notification or indication
+	 */
 	final static UUID CLIENT_CHARACTERISTIC_CONFIG_DESCRIPTOR_UUID = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb");
 
 	final static UUID BATTERY_SERVICE = UUID.fromString("0000180F-0000-1000-8000-00805f9b34fb");
@@ -452,6 +455,7 @@ public abstract class BleManager implements ILogger {
 
 	/**
 	 * The onConnectionStateChange event is triggered just after the Android connects to a device.
+	 * TODO 对于 bonded 设备，加密在该回调调用后重新建立，同时如果 service change indication 是 enabled，则在几百毫秒后该 indication 被接收到
 	 * In case of bonded devices, the encryption is reestablished AFTER this callback is called.
 	 * Moreover, when the device has Service Changed indication enabled, and the list of services
 	 * has changed (e.g. using the DFU), the indication is received few hundred milliseconds later,
@@ -459,6 +463,7 @@ public abstract class BleManager implements ILogger {
 	 * When received, Android will start performing a service discovery operation, internally,
 	 * and will NOT notify the app that services has changed.
 	 * <p>
+	 * TODO 如果不 delay 直接调用，会返回缓存的 services
 	 * If the gatt.discoverServices() method would be invoked here with no delay, if would return
 	 * cached services, as the SC indication wouldn't be received yet. Therefore, we have to
 	 * postpone the service discovery operation until we are (almost, as there is no such callback)
